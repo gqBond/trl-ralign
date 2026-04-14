@@ -7,8 +7,9 @@ Download lyn22333/R-Align-RL-Data and convert it into two datasets:
        `prompt`: system + user(prompt+A+B)
        `gt_label`, `gt_judgment`: passed through to the reward function.
 
-Both datasets are saved with `save_to_disk` so they can be loaded via
-`datasets.load_from_disk(path)` and passed to TRL scripts.
+Both datasets are saved as JSONL (`{train,test}.jsonl`) so they can be
+loaded directly by `datasets.load_dataset(path)` — which is what the
+TRL launch scripts call.
 
 Usage:
     python scripts/ralign/prepare_data.py --output_dir ./data/ralign
@@ -126,8 +127,9 @@ def main():
 
     (out / "sft").mkdir(parents=True, exist_ok=True)
     (out / "grpo").mkdir(parents=True, exist_ok=True)
-    splits_sft.save_to_disk(out / "sft")
-    splits_grpo.save_to_disk(out / "grpo")
+    for split_name in ("train", "test"):
+        splits_sft[split_name].to_json(out / "sft" / f"{split_name}.jsonl", orient="records", lines=True)
+        splits_grpo[split_name].to_json(out / "grpo" / f"{split_name}.jsonl", orient="records", lines=True)
 
     print(f"Saved SFT dataset   -> {out / 'sft'}  (train={len(splits_sft['train'])}, test={len(splits_sft['test'])})")
     print(f"Saved GRPO dataset  -> {out / 'grpo'} (train={len(splits_grpo['train'])}, test={len(splits_grpo['test'])})")
