@@ -10,9 +10,11 @@ OpenAI-compatible API (Gemini-3-Pro recommended) as the Meta-Judge.
 - `prepare_data.py`       download `lyn22333/R-Align-RL-Data`, build SFT + GRPO splits
 - `ralign_reward.py`      async reward: label check + Meta-Judge API call
 - `merge_adapter.py`      merge a QLoRA adapter back into the base (bf16)
+- `eval_benchmarks.py`    eval on RewardBench / JudgeBench / R-Align-BMK via vLLM
 - `accelerate_4x3090.yaml` DeepSpeed ZeRO-2, 4 processes, bf16
 - `run_sft.sh`            Stage 1: SFT warmup on Golden Rationales (QLoRA)
 - `run_grpo.sh`           Stage 2: GRPO with R-Align reward (QLoRA + vLLM colocate)
+- `run_eval.sh`           wrapper for eval_benchmarks.py
 
 ## Quickstart
 
@@ -57,17 +59,25 @@ python scripts/ralign/merge_adapter.py \
 
 ## Evaluation
 
-After training, score the model on the Rationale-Aware Benchmark using the
-original repo:
+Standalone evaluation (no API required for label accuracy):
 
 ```bash
-git clone https://github.com/lyn22333/R-Align ./third_party/R-Align
-# serve the trained model via vLLM (OpenAI-compatible), then point
-# gen_base_url / gen_api_key / gen_model in third_party/R-Align/run.sh
-# at your endpoint and run:
-bash third_party/R-Align/run.sh
-python third_party/R-Align/show_result.py
+MODEL=./outputs/ralign-final TP=4 bash scripts/ralign/run_eval.sh
 ```
 
-Expected: **F-Score up**, **S-Corr down** vs. the SFT-only baseline, while
-Label Accuracy stays roughly flat — the central claim of the paper.
+Benchmarks default to `reward_bench reward_bench_2 judge_bench`. Per-example
+predictions go to `eval_out/<bench>/predictions.jsonl`; aggregated metrics
+(label accuracy overall + per category) go to `eval_out/summary.json`.
+
+For rationale-aware metrics (F-Score / S-Corr on `lyn22333/R-Align-BMK`),
+enable the Meta-Judge API:
+
+```bash
+export METAJUDGE_BASE_URL=... METAJUDGE_API_KEY=... METAJUDGE_MODEL=gemini-3-pro-thinking
+RATIONALE_AWARE=1 MODEL=./outputs/ralign-final bash scripts/ralign/run_eval.sh
+```
+
+Expected after R-Align: **F-Score up**, **S-Corr down** vs. the SFT-only
+baseline, while Label Accuracy stays roughly flat — the central claim of
+the paper. You can also point the original `lyn22333/R-Align` eval repo at
+your vLLM-served model for a second opinion.
