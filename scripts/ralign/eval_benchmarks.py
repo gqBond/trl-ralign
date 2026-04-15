@@ -103,15 +103,30 @@ def _load_reward_bench_2(split: str = "train"):
         }
 
 
+def _normalize_pairwise_label(raw: str) -> str | None:
+    """Map labels like 'A>B', 'B>A', 'A', 'B' to the winning letter."""
+    s = (raw or "").strip().upper()
+    if ">" in s:
+        return s.split(">", 1)[0].strip() or None
+    if "<" in s:
+        return s.split("<", 1)[1].strip() or None
+    if s in ("A", "B"):
+        return s
+    return None
+
+
 def _load_judge_bench(split: str = "test"):
     ds = load_dataset("ScalerLab/JudgeBench", split=split)
     for row in ds:
-        # schema: question, response_A, response_B, label ("A"/"B"), source/category
+        # schema: question, response_A, response_B, label ("A>B"/"B>A"), source/category
+        label = _normalize_pairwise_label(row.get("label") or row.get("winner"))
+        if label is None:
+            continue  # skip ties or unparseable rows
         yield {
             "prompt": row.get("question") or row.get("prompt"),
             "response_A": row.get("response_A") or row.get("answer_A"),
             "response_B": row.get("response_B") or row.get("answer_B"),
-            "gt_label": str(row.get("label") or row.get("winner")).strip().upper(),
+            "gt_label": label,
             "category": row.get("category") or row.get("source", "unknown"),
         }
 
