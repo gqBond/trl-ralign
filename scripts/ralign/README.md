@@ -9,6 +9,7 @@ OpenAI-compatible API (Gemini-3-Pro recommended) as the Meta-Judge.
 
 - `prepare_data.py`       download `lyn22333/R-Align-RL-Data`, build SFT + GRPO splits
 - `ralign_reward.py`      async reward: label check + Meta-Judge API call
+- `merge_adapter.py`      merge a QLoRA adapter back into the base (bf16)
 - `accelerate_4x3090.yaml` DeepSpeed ZeRO-2, 4 processes, bf16
 - `run_sft.sh`            Stage 1: SFT warmup on Golden Rationales (QLoRA)
 - `run_grpo.sh`           Stage 2: GRPO with R-Align reward (QLoRA + vLLM colocate)
@@ -25,11 +26,21 @@ python scripts/ralign/prepare_data.py --output_dir ./data/ralign
 # 3. Stage 1 — SFT warmup
 bash scripts/ralign/run_sft.sh
 
-# 4. Stage 2 — R-Align GRPO (set API credentials first)
+# 4. Merge SFT adapter into base so GRPO starts from a clean checkpoint
+python scripts/ralign/merge_adapter.py \
+    --adapter_dir ./outputs/ralign-sft \
+    --output_dir  ./outputs/ralign-sft-merged
+
+# 5. Stage 2 — R-Align GRPO (set API credentials first)
 export METAJUDGE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
 export METAJUDGE_API_KEY=...
 export METAJUDGE_MODEL=gemini-3-pro-thinking
-bash scripts/ralign/run_grpo.sh
+MODEL=./outputs/ralign-sft-merged bash scripts/ralign/run_grpo.sh
+
+# 6. After GRPO, merge the GRPO adapter for vLLM serving / evaluation
+python scripts/ralign/merge_adapter.py \
+    --adapter_dir ./outputs/ralign-grpo \
+    --output_dir  ./outputs/ralign-final
 ```
 
 ## Notes for 4x3090
